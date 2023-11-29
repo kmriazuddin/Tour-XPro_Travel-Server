@@ -185,6 +185,40 @@ async function run() {
       const tourItem = req.body;
       const result = await packagesCollection.insertOne(tourItem);
       res.send(result);
+    });
+
+    // Delete Booking
+    app.delete('/packages/:id', verifyToken, verifyAdmin, async(req, res) => {
+      const id = req.params.id;
+      const query = {_id: new ObjectId(id)};
+      const result = await packagesCollection.deleteOne(query);
+      res.send(result);
+    });
+
+    // Booking Data Update
+    app.get('/packages/:id', async (req, res) => {
+      const id = req.params.id;
+      const result = await packagesCollection.findOne({_id: id});
+      res.send(result);
+    });
+
+    // Booking Data Update
+    app.patch('/packages/:id', async (req, res) => {
+      const item = req.body;
+      const id = req.params.id;
+      const filter = {_id: id}
+      const updateDoc = {
+        $set: {
+          tourName: item.tourName,
+          tourType: item.tourType,
+          price: item.price,
+          details: item.details,
+          rating: item.rating,
+          image: item.image
+        }
+      }
+      const result = await packagesCollection.updateOne(filter, updateDoc);
+      res.send(result);
     })
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
@@ -195,8 +229,6 @@ async function run() {
   }
 }
 run().catch(console.dir);
-
-
 
 
 // Specified Host And Port
