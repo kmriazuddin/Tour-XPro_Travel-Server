@@ -179,6 +179,13 @@ async function run() {
       const result = await bookingCollection.deleteOne(query);
       res.send(result);
     });
+
+    // Packages Data Insert a Add Tour Package
+    app.post('/packages', verifyToken, verifyAdmin, async(req, res) => {
+      const tourItem = req.body;
+      const result = await packagesCollection.insertOne(tourItem);
+      res.send(result);
+    })
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
     console.log("Pinged your deployment. You successfully connected to MongoDB!");
