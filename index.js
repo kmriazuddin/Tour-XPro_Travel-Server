@@ -1,4 +1,4 @@
-const { MongoClient, ServerApiVersion } = require('mongodb');
+const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 const express = require('express');
 require('dotenv').config();
 const cors = require('cors');
@@ -32,10 +32,26 @@ async function run() {
   try {
     // Connect the client to the server	(optional starting in v4.7)
     await client.connect();
+    const userCollection = client.db("tourPackages").collection("users");
     const overviewCollection = client.db("tourPackages").collection("overview");
     const packagesCollection = client.db("tourPackages").collection("packages");
     const reviewsCollection = client.db("tourPackages").collection("reviews");
     const guideCollection = client.db("tourPackages").collection("guide");
+    const bookingCollection = client.db("tourPackages").collection("bookings");
+
+    // User Related Api
+    app.post('/users', async(req, res) => {
+      const user = req.body;
+      // Insert Email If User Doesn't Exists:
+      // You Can Display this Many Ways (1. Email Unique, 2. Upsert, 3. Simple Checking)
+      const query = {email: user.email}
+      const existingUser = await userCollection.findOne(query);
+      if(existingUser){
+        return res.send({message: 'User Already Exists', insertedId: null})
+      }
+      const result = await userCollection.insertOne(user);
+      res.send(result);
+    });
 
     // Overview Data Collection
     app.get('/overview', async(req, res) => {
@@ -59,7 +75,30 @@ async function run() {
     app.get('/reviews', async(req, res) => {
       const result = await reviewsCollection.find().toArray();
       res.send(result);
-    })
+    });
+
+    // Booking Collection
+    app.post('/bookings', async(req, res) => {
+      const bookingItem = req.body;
+      const result = await bookingCollection.insertOne(bookingItem);
+      res.send(result);
+    });
+
+    // Booking Data Display
+    app.get('/bookings', async(req, res) => {
+      const email = req.query.email;
+      const query = {email: email};
+      const result = await bookingCollection.find(query).toArray();
+      res.send(result);
+    });
+
+    // Booking Data Delete
+    app.delete('/bookings/:id', async(req, res) => {
+      const id = req.params.id;
+      const query = {_id: new ObjectId(id)};
+      const result = await bookingCollection.deleteOne(query);
+      res.send(result);
+    });
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
     console.log("Pinged your deployment. You successfully connected to MongoDB!");
