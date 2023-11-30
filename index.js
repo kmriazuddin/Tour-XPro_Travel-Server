@@ -2,6 +2,7 @@ const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 const express = require('express');
 const jwt = require('jsonwebtoken');
 require('dotenv').config();
+const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
 const cors = require('cors');
 const app = express();
 const port = process.env.PORT || 8000;
@@ -39,6 +40,7 @@ async function run() {
     const reviewsCollection = client.db("tourPackages").collection("reviews");
     const guideCollection = client.db("tourPackages").collection("guide");
     const bookingCollection = client.db("tourPackages").collection("bookings");
+    const paymentCollection = client.db("tourPackages").collection("payments");
 
     // MiddleWares
     const verifyToken = (req, res, next) => {
@@ -219,7 +221,108 @@ async function run() {
       }
       const result = await packagesCollection.updateOne(filter, updateDoc);
       res.send(result);
-    })
+    });
+
+
+    ///////////////
+    // 
+    app.get('/packages', async (req, res) => {
+      const cursor = packagesCollection.find();
+      const result = await cursor.toArray()
+      res.send(result);
+    });
+
+    // Create Booking
+    app.post('/packages', async (req, res) => {
+      const services = req.body;
+      const result = await packagesCollection.insertOne(services);
+      res.send(result);
+    });
+
+    // Booking Delete
+    app.delete('/cancel-booking/:bookingId', async (req, res) => {
+      const id = req.params.bookingId;
+      const query = {
+        _id: new ObjectId(id)
+      };
+      const result = await packagesCollection.deleteOne(query);
+      res.send(result);
+    });
+
+    // 
+    app.get('/packages', verifyToken, async (req, res) => {
+      console.log(req.query.email);
+      console.log('Token Owner Info', req.user);
+      let query = {};
+      if (req.query?.email) {
+        query = { email: req.query.email }
+      }
+      const result = await packagesCollection.find(query).toArray();
+      res.send(result);
+    });
+
+    // ***
+    // Payment Intent
+    app.post('/create-payment-intent', async(req, res) => {
+      const {price} = req.body;
+      const amount = parseInt(price * 100);
+      console.log(amount, 'Amount Inside The Intent');
+
+      const paymentIntent = await stripe.paymentIntents.create({
+        amount: amount,
+        currency: 'usd',
+        payment_method_types: ['card']
+      });
+
+      res.send({
+        clientSecret: paymentIntent.client_secret
+      });
+    });
+
+    // Payment History Save
+    app.post('/payments', async(req, res) => {
+      const payment = req.body;
+      const paymentResult = await paymentCollection.insertOne(payment);
+
+      // Carefully Delete Each Item From The Cart
+      console.log('Payment Info', payment);
+      const query = {_id: {
+        $in: payment.cartIds.map(id => new ObjectId(id))
+      }}
+      const deleteResult = await paymentCollection.deleteMany(query);
+      res.send({paymentResult, deleteResult});
+    });
+
+    // Display The Payment History
+    app.get('/payments/:email', verifyToken, async(req, res) => {
+      const query = {email: req.params.email}
+      console.log(query);
+      if(req.params.email !== req.decoded.email){
+        return res.status(403).send({message: 'Forbidden Access'});
+      }
+      const result = await paymentCollection.find(query).toArray();
+      res.send(result);
+    });
+
+    // Stats Or Analytics
+    app.get('/admin-stats',  async(req, res) => {
+      const users = await userCollection.estimatedDocumentCount();
+      const menuItems = await bookingCollection.estimatedDocumentCount();
+      const orders = await paymentCollection.estimatedDocumentCount();
+      // Total Revenue
+      const result = await paymentCollection.aggregate([
+        {
+          $group: {
+            _id: null,
+            totalRevenue: {
+              $sum: '$price'
+            }
+          }
+        }
+      ]).toArray();
+      const revenue = result.length > 0 ? result[0].totalRevenue : 0;
+      res.send({users, menuItems, orders, revenue});
+    });
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
     console.log("Pinged your deployment. You successfully connected to MongoDB!");
