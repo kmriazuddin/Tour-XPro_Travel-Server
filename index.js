@@ -79,7 +79,7 @@ async function run() {
     });
 
     // User Related Api
-    app.post('/users', verifyToken, verifyAdmin, async (req, res) => {
+    app.post('/users', async (req, res) => {
       const user = req.body;
       // Insert Email If User Doesn't Exists:
       // You Can Display this Many Ways (1. Email Unique, 2. Upsert, 3. Simple Checking)
